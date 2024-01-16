@@ -36,7 +36,7 @@ import sys
 import time
 
 import ntp
-
+from array import array
 
 upython = sys.implementation.name == 'micropython'
 
@@ -44,9 +44,10 @@ if upython:
     import machine
     import network
     import uasyncio as asyncio
-    from sht30 import SHT30
+    import bme280_float as bme280
 else:
     import asyncio
+
 
     class Machine(object):
         """
@@ -77,14 +78,13 @@ else:
             def value(self):
                 return self.value
 
-    machine = Machine()
 
+    machine = Machine()
 
 if upython:
     onboard = machine.Pin('LED', machine.Pin.OUT, value=1)  # turn on right away
     blinky = machine.Pin(2, machine.Pin.OUT, value=0)  # status LED
     button = machine.Pin(3, machine.Pin.IN, machine.Pin.PULL_UP)
-
 
 BUFFER_SIZE = 4096
 CONFIG_FILE = 'data/config.json'
@@ -150,9 +150,9 @@ MORSE_PATTERNS = {  # sparse to save space
     '7': (MORSE_DAH, MORSE_DAH, MORSE_DIT, MORSE_DIT, MORSE_DIT),
     '8': (MORSE_DAH, MORSE_DAH, MORSE_DAH, MORSE_DIT, MORSE_DIT),
     '9': (MORSE_DAH, MORSE_DAH, MORSE_DAH, MORSE_DAH, MORSE_DIT),
-    'A': (MORSE_DIT, MORSE_DAH),                                    # 'A' is 0x41 ascii
+    'A': (MORSE_DIT, MORSE_DAH),  # 'A' is 0x41 ascii
     #  'C': (MORSE_DAH, MORSE_DIT, MORSE_DAH, MORSE_DIT),
-    'E': (MORSE_DIT, ),
+    'E': (MORSE_DIT,),
     #  'I': (MORSE_DIT, MORSE_DIT),
     #  'S': (MORSE_DIT, MORSE_DIT, MORSE_DIT),
     'R': (MORSE_DIT, MORSE_DAH, MORSE_DIT),
@@ -170,6 +170,7 @@ MP_END_BOUND = 4
 # globals...
 last_temperature = 0
 last_humidity = 0
+last_pressure = 0
 morse_message = ''
 restart = False
 port = None
@@ -738,6 +739,7 @@ async def serve_http_client(reader, writer):
                 payload = {'timestamp': get_timestamp(),
                            'last_temperature': f'{last_temperature:3.1f}',
                            'last_humidity': f'{last_humidity:3.1f}',
+                           'last_pressure': f'{last_pressure::5.3f}'
                            }
                 response = json.dumps(payload).encode('utf-8')
                 http_status = 200
@@ -774,24 +776,40 @@ async def morse_sender():
                     # blink time is in milliseconds!, but data is in 10 msec
                     blinky.on()
                     onboard.on()
-                    await asyncio.sleep(t/100)
+                    await asyncio.sleep(t / 100)
                     blinky.off()
                     onboard.off()
                 await asyncio.sleep(MORSE_ESP / 100 if len(blink_list) > 0 else MORSE_LSP / 100)
 
 
-async def sht30_reader(verbosity=4):
-    global last_temperature, last_humidity
-    sht = SHT30(i2c_id=1, scl_pin=27, sda_pin=26)
+async def bme280_reader(verbosity=4):
+    global last_temperature, last_humidity, last_pressure
+    i2c = machine.I2C(1, scl=machine.Pin(27), sda=machine.Pin(26))
+    result = array('f', (0.0, 0.0, 0.0))
+    bme = bme280.BME280(i2c=i2c)
+    # sht = SHT30(i2c_id=1, scl_pin=27, sda_pin=26)
 
     while True:
-        tc, h = sht.measure()
+        result = bme.read_compensated_data(result)
+        tc = result[0]
+        p = result[1]
+        h = result[2]
+        # tc, h = sht.measure()
+        p += 3507.67  # correction factor, unknown why
         tf = tc * 1.8 + 32.0  # make Fahrenheit for Americans
-        if verbosity > 4:
-            print(tf, h)
+        inhg = p / 1000 * 0.29530  # make inches of mercury for Americans
+
         last_temperature = round(tf, 1)
+        last_pressure = round(inhg, 2)
         last_humidity = round(h, 1)
-        await asyncio.sleep(15.0)
+        if verbosity > 4:
+            print(f'{p/100.0} hPa')
+            print(f'{get_timestamp()} ' +
+                  f'temperature {last_temperature}F, ' +
+                  f'humidity {last_humidity}%, ' +
+                  f'pressure {last_pressure} "hg')
+
+        await asyncio.sleep(60.0)
 
 
 async def main():
@@ -830,7 +848,8 @@ async def main():
         print('no network connection')
 
     if upython:
-        asyncio.create_task(sht30_reader())
+        # asyncio.create_task(sht30_reader())
+        asyncio.create_task(bme280_reader(5))
 
     if upython:
         last_pressed = button.value() == 0

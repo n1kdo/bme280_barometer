@@ -14,14 +14,16 @@ BAUD_RATE = 115200
 
 SRC_DIR = '../temperature/'
 FILES_LIST = [
+    'main.py',
     'content/',
     'data/',
-    'main.py',
+    'bme280_float.py',
     'ntp.py',
-    'sht30.py',
+#    'sht30.py',
     'content/files.html',
     'content/temperature.html',
     'content/setup.html',
+    'data/config.json',
 ]
 
 
@@ -79,6 +81,8 @@ def load_device(port):
     target.enter_raw_repl()
     for file in FILES_LIST:
         put_file(file, target)
+    print('finished sending files')
+
     target.exit_raw_repl()
     target.close()
 
@@ -96,26 +100,29 @@ def load_device(port):
 
 
 def main():
-    print('Disconnect the Pico-W if it is connected.')
-    input('(press enter to continue...)')
-    ports_1 = get_ports_list()
-    print(f'Detected serial ports: {" ".join(ports_1)}')
-    print('\nConnect the Pico-W to USB port.')
-    input('(press enter to continue...)')
-    ports_2 = get_ports_list()
-    print(f'Detected serial ports: {" ".join(ports_2)}')
+    if len(sys.argv) == 2:
+        picow_port = sys.argv[1]
+    else:
+        print('Disconnect the Pico-W if it is connected.')
+        input('(press enter to continue...)')
+        ports_1 = get_ports_list()
+        print('Detected serial ports: ' + ' '.join(ports_1))
+        print('\nConnect the Pico-W to USB port. Wait for the USB connected sound.')
+        input('(press enter to continue...)')
+        ports_2 = get_ports_list()
+        print('Detected serial ports: ' + ' '.join(ports_2))
 
-    picow_port = None
-    for port in ports_2:
-        if port not in ports_1:
-            picow_port = port
-            break
+        picow_port = None
+        for port in ports_2:
+            if port not in ports_1:
+                picow_port = port
+                break
 
     if picow_port is None:
         print('Could not identify Pico-W communications port.  Exiting.')
         sys.exit(1)
 
-    print(f'\nAttempting to load device on port {picow_port}.')
+    print(f'\nAttempting to load device on port {picow_port}')
     load_device(picow_port)
 
 

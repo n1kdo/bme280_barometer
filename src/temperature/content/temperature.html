@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html xmlns="http://www.w3.org/1999/html" lang="en">
-<!-- Copyright 2022, J. B. Otterson N1KDO. -->
+<!-- Copyright 2024, J. B. Otterson N1KDO. -->
 <head>
     <meta name="viewport" content="width=device-width, initial-scale=0.8, minimum-scale=0.5, maximum-scale=2.0">
     <title>Temperature and Humidity</title>
@@ -10,36 +10,22 @@
         font-size: 8pt;
         font-weight: bold;
         text-align: right;
-        position: absolute;
-        top: 342px;
-        width: 248px;
     }
     .author a:link, .author a:visited, .author a:hover {
         color: black;
         text-decoration: none;
     }
-    .readout {
-        background-color: #eff;
-        border-radius: 16px;
-        border-style: double;
-        font-family: monospace;
-        font-weight: bold;
-        font-size: 64px;
-        margin: 5px 30px;
-        padding: 0 10px;
-        text-align: right;
-    }
-    .readout-header {
-        font-weight: bold;
-        margin: 5px 30px;
-    }
     body {
         background-color: #ddd;
-        border-style: double;
         font-family: sans-serif;
         margin: 0;
-        height: 350px;
-        width: 500px;
+        min-height: 400px;
+        min-width: 800px;
+    }
+    .column {
+        float: left;
+        min-width: 250px;
+        width: 33.33%
     }
     .header {
         text-align: center;
@@ -52,15 +38,22 @@
     input[type=number]::-webkit-outer-spin-button {
         opacity: 1;
     }
-    .left_column {
-        float: left;
+    .readout-header {
+        font-weight: bold;
+        margin: 5px 0 0 0;
         text-align: center;
-        width: 250px;
     }
-    .right_column {
-        float: left;
+    .readout-chart {
+        margin: 0 0;
         text-align: center;
-        width: 250px;
+    }
+    .reload {
+        border: 1px solid black;
+        font-size: 12px;
+        text-align: center;
+    }
+    .trend-chart {
+        background-color: #ddf;
     }
     /* Clear floats after the columns */
     .row:after {
@@ -68,23 +61,11 @@
         display: table;
         clear: both;
     }
-    div.refresh_radio {
-        border: 1px solid black;
-        margin: 0 50px;
-        text-align: left;
-    }
-    .refresh_radio_label {
-        font-weight: bold;
-        text-align: center;
-    }
     .setup {
         font-size: 8pt;
         font-weight: bold;
         color: black;
         text-align: left;
-        position: absolute;
-        top: 340px;
-        width: 2px;
     }
     .setup a:link, .setup a:visited, .setup a:hover {
         color: blue;
@@ -101,6 +82,7 @@
 <script>
     let last_temperature = 0;
     let last_humidity = 0;
+    let last_pressure = 0;
     let timestamp = "";
 
     let update_secs = 0;
@@ -111,16 +93,56 @@
         get_status();
     }
 
+
+    function draw_graph(cvs, trend_data, current) {
+        let ctx = cvs.getContext("2d");
+        ctx.clearRect(0, 0, cvs.width, cvs.height);
+        ctx.strokeStyle = "Red";
+        let data = trend_data.split(" ");
+        ctx.beginPath();
+        let x = 0
+        let y = 0;
+        let set_start = -1;
+        for (let d of data) {
+            let v = parseInt(d, 16);
+            if (v !== 255) {
+                y = 255 - v;
+                if (set_start === -1) {
+                    ctx.moveTo(x, y);
+                    set_start = x;
+                } else {
+                    ctx.lineTo(x, y);
+                }
+            }
+            x++;
+        }
+        ctx.lineTo(x, y);
+        ctx.stroke();
+        ctx.fillStyle = "blue";
+        ctx.font = "normal normal bold 36px monospace";
+        ctx.fillText(current, 10, 30);
+    }
+
     function process_get_status_response(message) {
         let status_data = JSON.parse(message);
         timestamp = status_data.timestamp;
         last_temperature = status_data.last_temperature;
         last_humidity = status_data.last_humidity;
+        last_pressure = status_data.last_pressure;
+        let t_trend = status_data.t_trend;
+        let h_trend = status_data.h_trend;
+        let p_trend = status_data.p_trend;
 
-        document.getElementById("current_temperature").innerHTML = last_temperature;
-        document.getElementById("current_humidity").innerHTML = last_humidity;
+        let cvs = document.getElementById("t_trend");
+        draw_graph(cvs, t_trend, last_temperature);
+
+        cvs = document.getElementById("h_trend");
+        draw_graph(cvs, h_trend, last_humidity);
+
+        cvs = document.getElementById("p_trend");
+        draw_graph(cvs, p_trend, last_pressure);
+
         document.getElementById("timestamp").innerHTML = timestamp;
-
         document.getElementById('refresh_radio_0').checked = (update_secs === 0);
         document.getElementById('refresh_radio_1').checked = (update_secs === 1);
         document.getElementById('refresh_radio_5').checked = (update_secs === 5);
@@ -147,6 +169,7 @@
                 process_get_status_response(xmlHttp.responseText);
             }
         }
+        //xmlHttp.open("GET", "http://picow-pins/api/status", true);  // TODO FIXME
         xmlHttp.open("GET", "/api/status", true);
         xmlHttp.send();
     }
@@ -164,30 +187,35 @@
     }
 </script>
 <body onload="page_load()">
-<div class="header">Temperature and Humidity</div>
+<div class="header">Environmental Data</div>
 <div class="timestamp"><p class="timestamp" id="timestamp"></p></div>
 <div class="row">
-    <div class="left_column">
+    <div class="column">
         <p class="readout-header">Temperature</p>
-        <p class="readout" id="current_temperature">&nbsp;</p>
+        <p class="readout-chart"><canvas class="trend-chart" width="240" height="256" id="t_trend"></canvas></p>
         <div class="setup"><a href="setup.html">Setup</a></div>
     </div>
-    <div class="right_column">
+    <div class="column">
         <p class="readout-header">Humidity</p>
-        <p class="readout" id="current_humidity">&nbsp;</p>
-        <div class="refresh_radio">
-            <div class="refresh_radio_label">Auto-Refresh</div>
+        <p class="readout-chart"><canvas class="trend-chart" width="240" height="256" id="h_trend"></canvas></p>
+        <div class="reload">Refresh&nbsp;
             <input type="radio" name="refresh_radio" id="refresh_radio_0" value="0" onclick="set_refresh(0)"/>
-            <label for="refresh_radio_0">Never</label><br>
+            <label for="refresh_radio_0">Never</label>&nbsp;
             <input type="radio" name="refresh_radio" id="refresh_radio_1" value="1" onclick="set_refresh(1)"/>
-            <label for="refresh_radio_1">1 second</label><br>
+            <label for="refresh_radio_1">1s</label>&nbsp;
             <input type="radio" name="refresh_radio" id="refresh_radio_5" value="5" onclick="set_refresh(5)"/>
-            <label for="refresh_radio_5">5 seconds</label><br>
+            <label for="refresh_radio_5">5s</label>&nbsp;
             <input type="radio" name="refresh_radio" id="refresh_radio_60" value="60" onclick="set_refresh(60)"/>
-            <label for="refresh_radio_60">60 seconds</label><br>
+            <label for="refresh_radio_60">60s</label>
         </div>
-        <div class="author"><a href="https://www.n1kdo.com" target="_blank">N1KDO</a> 20221217</div>
+    </div>
+    <div class="column">
+        <p class="readout-header">Pressure</p>
+        <p class="readout-chart"><canvas class="trend-chart" width="240" height="256" id="p_trend"></canvas></p>
+        <div class="author"><a href="https://www.n1kdo.com" target="_blank">N1KDO</a> 20240119</div>
     </div>
 </div>
+
+
 </body>
 </html>

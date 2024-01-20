@@ -148,6 +148,59 @@ port = None
 http_server = HttpServer(content_dir='content/')
 morse_code_sender = MorseCode(onboard)
 
+MAX_SAMPLES = 240  # one sample every 10 minutes
+
+
+class Samples:
+    def __init__(self, max_samples):
+        self.max_samples = max_samples
+        self.next_sample = 0
+        self.samples = bytearray(b'\xff' * max_samples)
+
+    def add_sample(self, sample):
+        self.samples[self.next_sample] = sample
+        self.next_sample += 1
+        if self.next_sample == self.max_samples:
+            self.next_sample = 0
+
+    def get_samples(self):
+        read_sample = self.next_sample
+        first = True
+        while read_sample != self.next_sample or first:
+            first = False
+            yield self.samples[read_sample]
+            read_sample += 1
+            if read_sample == self.max_samples:
+                read_sample = 0
+
+    def get_samples_printable(self):
+        read_sample = self.next_sample
+        first = True
+        while read_sample != self.next_sample or first:
+            first = False
+            yield f'{self.samples[read_sample]:02x}'
+            read_sample += 1
+            if read_sample == self.max_samples:
+                read_sample = 0
+
+    def get_samples_numbers(self):
+        read_sample = self.next_sample
+        first = True
+        while read_sample != self.next_sample or first:
+            first = False
+            yield int(self.samples[read_sample])
+            read_sample += 1
+            if read_sample == self.max_samples:
+                read_sample = 0
+
+    def __str__(self):
+        return ' '.join(self.get_samples_printable())
+
+
+t_samples = Samples(MAX_SAMPLES)
+h_samples = Samples(MAX_SAMPLES)
+p_samples = Samples(MAX_SAMPLES)
+
 
 def get_timestamp(tt=None):
     if tt is None:
@@ -507,6 +560,24 @@ async def api_upload_file_callback(http, verb, args, reader, writer, request_hea
 
 
 # noinspection PyUnusedLocal
+async def api_remove_file_callback(http, verb, args, reader, writer, request_headers=None):
+    filename = args.get('filename')
+    if valid_filename(filename) and filename not in DANGER_ZONE_FILE_NAMES:
+        filename = http.content_dir + filename
+        try:
+            os.remove(filename)
+            http_status = 200
+            response = b'removed\r\n'
+        except OSError as ose:
+            http_status = 409
+            response = str(ose).encode('utf-8')
+    else:
+        http_status = 409
+        response = b'bad file name\r\n'
+    bytes_sent = http.send_simple_response(writer, http_status, http.CT_APP_JSON, response)
+
+
+# noinspection PyUnusedLocal
 async def api_rename_file_callback(http, verb, args, reader, writer, request_headers=None):
     filename = args.get('filename')
     newname = args.get('newname')
@@ -550,7 +621,10 @@ async def api_status_callback(http, verb, args, reader, writer, request_headers=
     payload = {'timestamp': get_timestamp(),
                'last_temperature': f'{last_temperature:3.1f}',
                'last_humidity': f'{last_humidity:3.1f}',
-               'last_pressure': f'{last_pressure:6.3f}'
+               'last_pressure': f'{last_pressure:5.2f}',
+               't_trend': str(t_samples),
+               'h_trend': str(h_samples),
+               'p_trend': str(p_samples),
                }
 
     response = json.dumps(payload).encode('utf-8')
@@ -599,6 +673,7 @@ async def bme280_reader(verbosity=4):
     i2c = machine.I2C(1, scl=machine.Pin(27), sda=machine.Pin(26))
     result = array('f', (0.0, 0.0, 0.0))
     bme = bme280.BME280(i2c=i2c)
+    divider_count = 1
     # sht = SHT30(i2c_id=1, scl_pin=27, sda_pin=26)
 
     while True:
@@ -609,20 +684,38 @@ async def bme280_reader(verbosity=4):
         # tc, h = sht.measure()
         #p += 3507.67  # correction factor, unknown why at this time.
         p += 3625  # correction factor, unknown why at this time.
+        hpa = p / 100.0
+
         tf = tc * 1.8 + 32.0  # make Fahrenheit for Americans
         inhg = p / 1000 * 0.295300  # make inches of mercury for Americans
+
+        pp = int((hpa - 950) * 2)
+        pt = int((tc + 40) * 2)
+        ph = int(h * 2)
 
         last_temperature = round(tf, 1)
         last_pressure = round(inhg, 2)
         last_humidity = round(h, 1)
         if verbosity > 4:
-            print(f'{p/100.0:7.2f} hPa')
+            print(f'{hpa:7.2f} hPa')
             print(f'{get_timestamp()} ' +
                   f'temperature {last_temperature:5.1f}F, ' +
                   f'humidity {last_humidity:5.1f}%, ' +
                   f'pressure {last_pressure:5.2f} in. Hg')
+            print(f'{pt}, {ph}, {pp}')
+
+        divider_count -= 1
+        if divider_count == 0:  # every 6 minutes, .1 hour
+            divider_count = 6  # this is the number of minutes between samples.
+            t_samples.add_sample(pt)
+            h_samples.add_sample(ph)
+            p_samples.add_sample(pp)
+            # print(t_samples)
+            # print(h_samples)
+            # print(p_samples)
 
         await asyncio.sleep(60.0)
+        #await asyncio.sleep(1.0)
 
 
 async def main():
@@ -658,6 +751,7 @@ async def main():
         http_server.add_uri_callback('/api/config', api_config_callback)
         http_server.add_uri_callback('/api/get_files', api_get_files_callback)
         http_server.add_uri_callback('/api/upload_file', api_upload_file_callback)
+        http_server.add_uri_callback('/api/remove_file', api_remove_file_callback)
         http_server.add_uri_callback('/api/rename_file', api_rename_file_callback)
         http_server.add_uri_callback('/api/restart', api_restart_callback)
         http_server.add_uri_callback('/api/status', api_status_callback)

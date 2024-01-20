@@ -449,7 +449,7 @@ async def api_get_files_callback(http, verb, args, reader, writer, request_heade
 async def api_upload_file_callback(http, verb, args, reader, writer, request_headers=None):
     if verb == 'POST':
         boundary = None
-        request_content_type = request_headers.get('content-type') or ''
+        request_content_type = request_headers.get('Content-Type') or ''
         if ';' in request_content_type:
             pieces = request_content_type.split(';')
             request_content_type = pieces[0]
@@ -462,7 +462,7 @@ async def api_upload_file_callback(http, verb, args, reader, writer, request_hea
         else:
             response = b'unhandled problem'
             http_status = 500
-            request_content_length = int(request_headers.get('content-length') or '0')
+            request_content_length = int(request_headers.get('Content-Length') or '0')
             remaining_content_length = request_content_length
             start_boundary = http.HYPHENS + boundary
             end_boundary = start_boundary + http.HYPHENS
@@ -575,6 +575,7 @@ async def api_remove_file_callback(http, verb, args, reader, writer, request_hea
         http_status = 409
         response = b'bad file name\r\n'
     bytes_sent = http.send_simple_response(writer, http_status, http.CT_APP_JSON, response)
+    return bytes_sent, http_status
 
 
 # noinspection PyUnusedLocal
@@ -710,9 +711,6 @@ async def bme280_reader(verbosity=4):
             t_samples.add_sample(pt)
             h_samples.add_sample(ph)
             p_samples.add_sample(pp)
-            # print(t_samples)
-            # print(h_samples)
-            # print(p_samples)
 
         await asyncio.sleep(60.0)
         #await asyncio.sleep(1.0)

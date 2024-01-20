@@ -6,9 +6,9 @@ __author__ = 'J. B. Otterson'
 __copyright__ = 'Copyright 2022, J. B. Otterson N1KDO.'
 
 import os
-import pyboard
 import serial
 import sys
+from pyboard import Pyboard, PyboardError
 from serial.tools.list_ports import comports
 BAUD_RATE = 115200
 
@@ -81,7 +81,11 @@ def put_file(filename, target):
 
 
 def load_device(port):
-    target = pyboard.Pyboard(port, BAUD_RATE)
+    try:
+        target = Pyboard(port, BAUD_RATE)
+    except PyboardError as e:
+        print(f'cannot access port {port}, is something else using it?')
+        sys.exit(1)
     target.enter_raw_repl()
     for file in FILES_LIST:
         put_file(file, target)
@@ -100,7 +104,15 @@ def load_device(port):
                        stopbits=serial.STOPBITS_ONE,
                        timeout=1) as pyboard_port:
         pyboard_port.write(b'\x04')
-    print('\nDevice should restart.')
+        print('\nDevice should restart.')
+
+        while True:
+            try:
+                b = pyboard_port.read(1)
+                sys.stdout.write(b.decode())
+            except serial.SerialException:
+                print(f'\n\nLost connection to device on {port}.')
+                break
 
 
 def main():

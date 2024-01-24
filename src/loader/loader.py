@@ -3,7 +3,7 @@
 Script loads code & other assets onto Raspberry Pi Pico W
 """
 __author__ = 'J. B. Otterson'
-__copyright__ = 'Copyright 2022, J. B. Otterson N1KDO.'
+__copyright__ = 'Copyright 2022, 2024, J. B. Otterson N1KDO.'
 
 import os
 import serial
@@ -22,7 +22,7 @@ FILES_LIST = [
     'micro_logging.py',
     'morse_code.py',
     'ntp.py',
-#    'sht30.py',
+    'picow_network.py',
     'utils.py',
     'content/files.html',
     'content/temperature.html',

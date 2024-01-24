@@ -83,6 +83,15 @@ else:
     machine = Machine()
 
 if upython:
+    network_status_map = {
+        network.STAT_IDLE: 'no connection and no activity',  # 0
+        network.STAT_CONNECTING: 'connecting in progress',  # 1
+        network.STAT_CONNECTING + 1: 'connected no IP address',  # 2, this is undefined, but returned.
+        network.STAT_GOT_IP: 'connection successful',  # 3
+        network.STAT_WRONG_PASSWORD: 'failed due to incorrect password',  # -3
+        network.STAT_NO_AP_FOUND: 'failed because no access point replied',  # -2
+        network.STAT_CONNECT_FAIL: 'failed due to other problems',  # -1
+    }
     onboard = machine.Pin('LED', machine.Pin.OUT, value=1)  # turn on right away
     # blinky = machine.Pin(2, machine.Pin.OUT, value=0)  # status LED
     button = machine.Pin(3, machine.Pin.IN, machine.Pin.PULL_UP)
@@ -244,31 +253,41 @@ def valid_filename(filename):
 
 
 def connect_to_network(config):
-    config['hostname'] = 'sht30'
     network.country('US')
-
     ssid = config.get('SSID') or ''
     if len(ssid) == 0 or len(ssid) > 64:
         ssid = DEFAULT_SSID
     secret = config.get('secret') or ''
     if len(secret) > 64:
         secret = ''
-    access_point_mode = config.get('ap_mode') or False
 
+    hostname = config.get('hostname')
+    if hostname is None or hostname == '':
+        hostname = 'sht30'
+    try:
+        logging.info(f'...setting hostname "{hostname}"', 'main:connect_to_network')
+        network.hostname(hostname)
+    except ValueError:
+        logging.error('Failed to set hostname.', 'main:connect_to_network')
+
+    access_point_mode = config.get('ap_mode') or False
     if access_point_mode:
-        print('Starting setup WLAN...')
+        logging.info('Starting setup WLAN...', 'main:connect_to_network')
         wlan = network.WLAN(network.AP_IF)
-        wlan.active(False)
-        wlan.config(pm=0xa11140)  # disable power save, this is a server.
+        wlan.deinit()
+        wlan.config(pm=wlan.PM_NONE)  # disable power save, this is a server.
+        # wlan.deinit turns off the onboard LED because it is connected to the CYW43
+        # turn it on again.
+        onboard = machine.Pin('LED', machine.Pin.OUT, value=0)
+        onboard.on()
 
         hostname = config.get('hostname')
         if hostname is not None:
             try:
-                wlan.config(hostname=hostname)
-            except ValueError as exc:
-                print(f'hostname is still not supported on Pico W')
-
-        # wlan.ifconfig(('10.0.0.1', '255.255.255.0', '0.0.0.0', '0.0.0.0'))
+                logging.info(f'  setting hostname "{hostname}"', 'main:connect_to_network')
+                network.hostname(hostname)
+            except ValueError:
+                logging.error('Failed to set hostname.', 'main:connect_to_network')
 
         """
         #define CYW43_AUTH_OPEN (0)                     ///< No authorisation required (open)
@@ -284,58 +303,69 @@ def connect_to_network(config):
             security = 0x00400004  # CYW43_AUTH_WPA2_AES_PSK
         wlan.config(ssid=ssid, key=secret, security=security)
         wlan.active(True)
-        print(wlan.active())
-        print('ssid={}'.format(wlan.config('ssid')))
+        logging.info(f'  wlan.active()={wlan.active()}', 'main:connect_to_network')
+        logging.info(f'  ssid={wlan.config("ssid")}', 'main:connect_to_network')
+        logging.info(f'  ifconfig={wlan.ifconfig()}', 'main:connect_to_network')
     else:
-        print('Connecting to WLAN...')
+        logging.info('Connecting to WLAN...', 'main:connect_to_network')
         wlan = network.WLAN(network.STA_IF)
-        wlan.config(pm=0xa11140)  # disable power save, this is a server.
+        wlan.deinit()
+        # wlan.deinit turns off the onboard LED because it is connected to the CYW43
+        # turn it on again.
+        onboard = machine.Pin('LED', machine.Pin.OUT, value=0)
+        onboard.on()
+        wlan = network.WLAN(network.STA_IF)
+        wlan.active(True)
+        wlan.config(pm=wlan.PM_NONE)  # disable power save, this is a server.
 
-        hostname = config.get('hostname')
-        if hostname is not None:
-            try:
-                network.hostname(hostname)
-            except ValueError as exc:
-                print(f'hostname is still not supported on Pico W')
-
-        is_dhcp = config.get('dhcp') or True
+        logging.info(f'...ifconfig={wlan.ifconfig()}', 'main:connect_to_network')
+        is_dhcp = config.get('dhcp')
+        if is_dhcp is None:
+            is_dhcp = True
         if not is_dhcp:
             ip_address = config.get('ip_address')
             netmask = config.get('netmask')
             gateway = config.get('gateway')
             dns_server = config.get('dns_server')
             if ip_address is not None and netmask is not None and gateway is not None and dns_server is not None:
-                print('setting up static IP')
+                logging.info('Configuring network with static IP', 'main:connect_to_network')
                 wlan.ifconfig((ip_address, netmask, gateway, dns_server))
             else:
-                print('cannot use static IP, data is missing, configuring network with DHCP')
-                wlan.ifconfig('dhcp')
-        else:
-            print('configuring network with DHCP')
-            # wlan.ifconfig('dhcp')  #  this does not work.  network does not come up.  no errors, either.
+                logging.warning('Cannot use static IP, data is missing.', 'main:connect_to_network')
+                logging.warning('Configuring network with DHCP....', 'main:connect_to_network')
+                is_dhcp = True
+                # wlan.ifconfig('dhcp')
+        if is_dhcp:
+            logging.info('Configuring network with DHCP...', 'main:connect_to_network')
 
-        wlan.active(True)
-        wlan.connect(ssid, secret)
         max_wait = 10
+        wl_status = wlan.status()
+        logging.info(f'...ifconfig={wlan.ifconfig()}', 'main:connect_to_network')
+        logging.info(f'...connecting to "{ssid}"...', 'main:connect_to_network')
+        wlan.connect(ssid, secret)
         while max_wait > 0:
-            status = wlan.status()
-            if status < 0 or status >= 3:
+            wl_status = wlan.status()
+            st = network_status_map.get(wl_status) or 'undefined'
+            logging.info(f'...network status: {wl_status} {st}', 'main:connect_to_network')
+            if wl_status < 0 or wl_status >= 3:
                 break
             max_wait -= 1
-            print('Waiting for connection to come up, status={}'.format(status))
             time.sleep(1)
-        if wlan.status() != network.STAT_GOT_IP:
-            morse_code_sender.send_message('ERR ')
-            # return None
-            raise RuntimeError('Network connection failed')
+        if wl_status != network.STAT_GOT_IP:
+            logging.error('Network did not connect!', 'main:connect_to_network')
+            morse_code_sender.set_message('ERR')
+            return None, None
+        logging.info(f'...connected, ifconfig={wlan.ifconfig()}', 'main:connect_to_network')
 
-    status = wlan.ifconfig()
-    ip_address = status[0]
-    morse_message = 'A  {}  '.format(ip_address) if access_point_mode else '{} '.format(ip_address)
-    morse_message = morse_message.replace('.', ' ')
-    morse_code_sender.set_message(morse_message)
-    print(morse_message)
-    return ip_address
+    onboard.on()  # turn on the LED, WAN is up.
+    wl_config = wlan.ifconfig()
+    ip_address = wl_config[0]
+    netmask = wl_config[1]
+    message = f'AP {ip_address} ' if access_point_mode else f'{ip_address} '
+    message = message.replace('.', ' ')
+    morse_code_sender.set_message(message)
+    logging.info(f'setting morse code message to {message}', 'main:connect_to_network')
+    return ip_address, netmask
 
 
 # noinspection PyUnusedLocal
@@ -761,9 +791,9 @@ async def main():
     else:
         print('no network connection')
 
-    if upython:
+    #if upython:
         # asyncio.create_task(sht30_reader())
-        asyncio.create_task(bme280_reader(5))
+        #asyncio.create_task(bme280_reader(5))
 
     if upython:
         last_pressed = button.value() == 0
@@ -789,7 +819,9 @@ async def main():
 
 
 if __name__ == '__main__':
-    print('starting')
+    logging.loglevel = logging.DEBUG
+    #logging.loglevel = logging.INFO  # DEBUG
+    logging.info('starting', 'main:__main__')
     try:
         asyncio.run(main())
     except KeyboardInterrupt:

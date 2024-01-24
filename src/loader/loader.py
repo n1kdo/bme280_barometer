@@ -113,6 +113,9 @@ def load_device(port):
             except serial.SerialException:
                 print(f'\n\nLost connection to device on {port}.')
                 break
+            except KeyboardInterrupt:
+                print('\nKeyboardInterrupt -- bye bye.')
+                break
 
 
 def main():

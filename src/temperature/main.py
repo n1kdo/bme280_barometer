@@ -321,7 +321,6 @@ async def serve_serial_client(reader, writer):
     t0 = milliseconds()
     partner = writer.get_extra_info('peername')[0]
     logging.info(f'client connected from {partner}', 'main:serve_serial_client')
-    buffer = []
     client_connected = True
 
     try:
@@ -333,9 +332,17 @@ async def serve_serial_client(reader, writer):
                 if len(data) == 1:
                     b = data[0]
                     if b == 10:  # line feed, get temperature
-                        message = f'{get_timestamp()} {last_temperature} {last_humidity} {last_pressure}\r\n'.encode()
-                        writer.write(message)
-                    elif b == 81 or b == 113:  # q/Q exit
+                        payload = {'timestamp': get_timestamp(),
+                                   'last_temperature': f'{last_temperature:3.1f}',
+                                   'last_humidity': f'{last_humidity:3.1f}',
+                                   'last_pressure': f'{last_pressure:5.2f}',
+                                   't_trend': str(t_samples),
+                                   'h_trend': str(h_samples),
+                                   'p_trend': str(p_samples),
+                                   }
+                        response = (json.dumps(payload) + '\n').encode('utf-8')
+                        writer.write(response)
+                    elif b == 4 or b == 26 or b == 81 or b == 113:  # ^D/^z/q/Q exit
                         client_connected = False
                     await writer.drain()
 
@@ -437,12 +444,12 @@ async def main():
         bme280_device = None
         try:
             bme280_device = bme280.BME280(i2c=i2c)
-        except AttributeError as exc:
-            logging.error('Cannot find bme280 sensor!', 'main:main')
+        except Exception as exc:
+            logging.error(f'Cannot find bme280 sensor! {exc}', 'main:main')
             bme280_device = None
 
         if bme280_device is not None:
-            bme280_task = asyncio.create_task(bme280_device)
+            bme280_task = asyncio.create_task(bme280_reader(bme280_device))
 
     if upython:
         last_pressed = button.value() == 0

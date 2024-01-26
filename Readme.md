@@ -49,15 +49,7 @@ series**.  I use four NiMH cells in series.
 
 ### setup
 
-1. press the AP mode button and the device will restart in access point mode. 
-2. connect to the 'bmp280' WiFi network using password 'temperature'.  
-3. your phone or tablet may resist staying connected to this network as the internet is unreachable through it. 
-   this needs to be dealt with on that device.
-4. navigate to http://192.168.4.1 which should show the temperature page.
-5. click the 'setup' link in the lower left.
-6. set your SSID and password on this page.
-7. press 'apply' and then 'restart'.
-8. the device should connect to your network.
+See [Installation and Setup](Installation-and-Setup.md)
 
 ### software
 

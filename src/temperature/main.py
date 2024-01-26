@@ -95,7 +95,7 @@ button = machine.Pin(3, machine.Pin.IN, machine.Pin.PULL_UP)
 CONFIG_FILE = 'data/config.json'
 CONTENT_DIR = 'content/'
 
-DEFAULT_SECRET = 'temperature'
+DEFAULT_SECRET = 'barometer'
 DEFAULT_SSID = 'bme280'
 DEFAULT_TCP_PORT = 73
 DEFAULT_WEB_PORT = 80
@@ -434,15 +434,15 @@ async def main():
 
     if upython:
         i2c = machine.I2C(1, scl=machine.Pin(27), sda=machine.Pin(26))
-        bme280 = None
+        bme280_device = None
         try:
-            bme280 = bme280.BME280(i2c=i2c)
+            bme280_device = bme280.BME280(i2c=i2c)
         except AttributeError as exc:
             logging.error('Cannot find bme280 sensor!', 'main:main')
-            bme280 = None
+            bme280_device = None
 
-        if bme280 is not None:
-            bme280_task = asyncio.create_task(bme280)
+        if bme280_device is not None:
+            bme280_task = asyncio.create_task(bme280_device)
 
     if upython:
         last_pressed = button.value() == 0
@@ -468,8 +468,8 @@ async def main():
 
 
 if __name__ == '__main__':
-    logging.loglevel = logging.DEBUG
-    #logging.loglevel = logging.INFO  # DEBUG
+    # logging.loglevel = logging.DEBUG
+    logging.loglevel = logging.INFO  # DEBUG
     logging.info('starting', 'main:__main__')
     try:
         asyncio.run(main())

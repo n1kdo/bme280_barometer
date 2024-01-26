@@ -372,21 +372,26 @@ async def bme280_reader(bme):
         tf = tc * 1.8 + 32.0  # make Fahrenheit for Americans
         inhg = p / 1000 * 0.295300  # make inches of mercury for Americans
 
-        pp = int((hpa - 950) * 2)
-        pt = int((tc + 40) * 2)
-        ph = int(h * 2)
-
         last_temperature = round(tf, 1)
         last_pressure = round(inhg, 2)
         last_humidity = round(h, 1)
         logging.info(f'{hpa:7.2f} hPa', 'main:bme280_reader')
         logging.info(f'{get_timestamp()} temperature {last_temperature:5.1f}F, ' +
                      f'humidity {last_humidity:5.1f}%, pressure {last_pressure:5.2f} in. Hg', 'main:bme280_reader')
-        logging.debug(f'{pt}, {ph}, {pp}', 'main:bme280_reader')
 
         divider_count -= 1
         if divider_count == 0:  # every 6 minutes, .1 hour
             divider_count = 6  # this is the number of minutes between samples.
+            # scale samples
+            pp = int((hpa - 950) * 2)  # pressure 950 - 1077 ( in 1/2 hpa intervals )
+            pt = int(tc + 30) * 3  # -30 -> 55c == -22 -> 131f in 1/3 degree C intervals
+            if pt < 0:
+                pt = 0
+            elif pt > 255:
+                pt = 255
+            ph = int(h * 2.5)  # 0 - 250
+            logging.info(f'collecting samples {pt}, {ph}, {pp}', 'main:bme280_reader')
+
             t_samples.add_sample(pt)
             h_samples.add_sample(ph)
             p_samples.add_sample(pp)

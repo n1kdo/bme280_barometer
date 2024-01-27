@@ -3,12 +3,13 @@
 <!-- Copyright 2024, J. B. Otterson N1KDO. -->
 <head>
     <meta name="viewport" content="width=device-width, initial-scale=0.8, minimum-scale=0.5, maximum-scale=2.0">
-    <title>Temperature and Humidity</title>
+    <title>Weather Gauges</title>
 </head>
 <style>
     .author {
         font-size: 8pt;
         font-weight: bold;
+        margin-right: 2px;
         text-align: right;
     }
     .author a:link, .author a:visited, .author a:hover {
@@ -187,7 +188,7 @@
     }
 </script>
 <body onload="page_load()">
-<div class="header">Environmental Data</div>
+<div class="header">Weather Gauges</div>
 <div class="timestamp"><p class="timestamp" id="timestamp"></p></div>
 <div class="row">
     <div class="column">
@@ -212,10 +213,8 @@
     <div class="column">
         <p class="readout-header">Pressure</p>
         <p class="readout-chart"><canvas class="trend-chart" width="240" height="256" id="p_trend"></canvas></p>
-        <div class="author"><a href="https://www.n1kdo.com" target="_blank">N1KDO</a> 20240119</div>
+        <div class="author"><a href="https://www.n1kdo.com" target="_blank">N1KDO</a> 20240126</div>
     </div>
 </div>
-
-
 </body>
 </html>

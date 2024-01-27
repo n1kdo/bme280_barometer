@@ -36,6 +36,7 @@ if upython:
 else:
     import logging
 
+
 class HttpServer:
     BUFFER_SIZE = 4096
     CT_TEXT_TEXT = 'text/text'
@@ -117,7 +118,7 @@ class HttpServer:
                     if len(buffer) < self.BUFFER_SIZE:
                         break
         except Exception as exc:
-            logging.info('{type(exc)} {exc}', 'http_server:serve_content')
+            logging.error('{type(exc)} {exc}', 'http_server:serve_content')
         return content_length, http_status
 
     def start_response(self, writer, http_status=200, content_type=None, response_size=0, extra_headers=None):
@@ -440,6 +441,3 @@ async def api_rename_file_callback(http, verb, args, reader, writer, request_hea
         response = b'bad file name'
     bytes_sent = http.send_simple_response(writer, http_status, http.CT_APP_JSON, response)
     return bytes_sent, http_status
-
-
-

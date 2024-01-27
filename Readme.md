@@ -1,19 +1,20 @@
-# Raspberry Pi Pico W Temperature and Humidity
+# Raspberry Pi Pico W Weather Gauges
 
-This runs on Raspberry Pi Pico W and uses a Bosch BME sensor to collect
+This runs on $6 Raspberry Pi Pico W and uses a $7 Bosch BME280 sensor to collect
 Temperature, Humidity, and Atmospheric Pressure.
 
 ![screenshot](images/screenshot.png)
 
-It provides the temperature and humidity values on a locally-hosted web page, and through 
-the `/api/status` API which returns a JSON document containing timestamp, temperature,
-and humidity values.
+It provides the current temperature, humidity, and barometric pressure in convenient
+Fahrenheit and Imperial Inches of Mercury. The current values can be fetched via web 
+API, raw socket, and on local web page.  The web page provides graphs that show daily
+trends of the data.
 
 ## hardware
 
 ### BME280 Temperature, Humidity, Pressure
 
-![bad photo](images/bad-photo.jpg)
+![two electronic modules](images/bad-photo.jpg)
 
 This version uses a Bosch BME280 sensor on a breakout board from Amazon.  The required pull-up resistors
 are present on the board, so this is just four wires.
@@ -56,7 +57,7 @@ See [Installation and Setup](Installation-and-Setup.md)
 This uses some of the same software I wrote for my
 [Ham-IV Rotator Controller-Controller](https://github.com/n1kdo/rotator-controller-controller).
 
-n1kdo 20240123
+n1kdo 20240126
 
 
 

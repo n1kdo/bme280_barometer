@@ -106,7 +106,7 @@ last_humidity = 0
 last_pressure = 0
 restart = False
 port = None
-http_server = HttpServer(content_dir='content/')
+http_server = HttpServer(content_dir=CONTENT_DIR)
 morse_code_sender = MorseCode(onboard)
 
 MAX_SAMPLES = 240  # one sample every 10 minutes
@@ -384,12 +384,12 @@ async def bme280_reader(bme):
             divider_count = 6  # this is the number of minutes between samples.
             # scale samples
             pp = int((hpa - 950) * 2)  # pressure 950 - 1077 ( in 1/2 hpa intervals )
-            pt = int(tc + 30) * 3  # -30 -> 55c == -22 -> 131f in 1/3 degree C intervals
+            pt = int((tc + 30) * 3)  # -30 -> 55c == -22 -> 131f in 1/3 degree C intervals
             if pt < 0:
                 pt = 0
-            elif pt > 255:
-                pt = 255
-            ph = int(h * 2.5)  # 0 - 250
+            elif pt > 254:
+                pt = 254
+            ph = int(h * 2.54)  # 0-100% as 0 - 254
             logging.info(f'collecting samples {pt}, {ph}, {pp}', 'main:bme280_reader')
 
             t_samples.add_sample(pt)

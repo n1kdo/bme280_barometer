@@ -98,7 +98,6 @@
     }
 </style>
 <script>
-
     function page_load() {
         document.getElementById("upload_button").disabled = true;
         get_files();
@@ -212,7 +211,7 @@
 
     function rename_file(filename) {
         if (filename !== undefined) {
-        let newname = prompt('enter new name for "' + filename + '"');
+        let newname = prompt('enter new name for "' + filename + '"', filename);
             let payload = {};
             payload.filename = filename;
             payload.newname = newname

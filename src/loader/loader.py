@@ -24,6 +24,7 @@ FILES_LIST = [
     'ntp.py',
     'picow_network.py',
     'utils.py',
+    'content/favicon.ico',
     'content/files.html',
     'content/temperature.html',
     'content/setup.html',

@@ -270,6 +270,13 @@ def valid_filename(filename):
     return True
 
 
+def file_size(filename):
+    try:
+        return os.stat(filename)[6]
+    except OSError:
+        return -1
+
+
 # noinspection PyUnusedLocal
 async def api_get_files_callback(http, verb, args, reader, writer, request_headers=None):
     if verb == 'GET':
@@ -313,7 +320,6 @@ async def api_upload_file_callback(http, verb, args, reader, writer, request_hea
             more_bytes = True
             leftover_bytes = []
             while more_bytes:
-                # print('waiting for read')
                 buffer = await reader.read(HttpServer.BUFFER_SIZE)
                 remaining_content_length -= len(buffer)
                 if remaining_content_length == 0:  # < BUFFER_SIZE:
@@ -349,7 +355,6 @@ async def api_upload_file_callback(http, verb, args, reader, writer, request_hea
                                 end -= 3
                         output_file.write(buffer[start:end])
                         if not writing_file:
-                            # print('closing file')
                             state = http.MP_END_BOUND
                             output_file.close()
                             output_file = None
@@ -381,8 +386,6 @@ async def api_upload_file_callback(http, verb, args, reader, writer, request_hea
                                         http_status = 500
                                         more_bytes = False
                                         start = len(buffer)
-                            # else:
-                            #     print('processing headers, got ' + line)
                         elif state == http.MP_END_BOUND:
                             if line == end_boundary:
                                 state = http.MP_START_BOUND
@@ -407,13 +410,13 @@ async def api_remove_file_callback(http, verb, args, reader, writer, request_hea
         try:
             os.remove(filename)
             http_status = 200
-            response = b'removed\r\n'
+            response = f'removed {filename}'.encode('utf-8')
         except OSError as ose:
             http_status = 409
             response = str(ose).encode('utf-8')
     else:
         http_status = 409
-        response = b'bad file name\r\n'
+        response = b'bad file name'
     bytes_sent = http.send_simple_response(writer, http_status, http.CT_APP_JSON, response)
     return bytes_sent, http_status
 
@@ -425,17 +428,21 @@ async def api_rename_file_callback(http, verb, args, reader, writer, request_hea
     if valid_filename(filename) and valid_filename(newname):
         filename = http.content_dir + filename
         newname = http.content_dir + newname
-        try:
-            os.remove(newname)
-        except OSError:
-            pass  # swallow exception.
-        try:
-            os.rename(filename, newname)
-            http_status = 200
-            response = b'renamed\r\n'
-        except Exception as ose:
+        if file_size(newname) >= 0:
             http_status = 409
-            response = str(ose).encode('utf-8')
+            response = f'new file {newname} already exists'.encode('utf-8')
+        else:
+            try:
+                os.remove(newname)
+            except OSError:
+                pass  # swallow exception.
+            try:
+                os.rename(filename, newname)
+                http_status = 200
+                response = f'renamed {filename} to {newname}'.encode('utf-8')
+            except Exception as ose:
+                http_status = 409
+                response = str(ose).encode('utf-8')
     else:
         http_status = 409
         response = b'bad file name'

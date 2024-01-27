@@ -283,7 +283,7 @@ async def api_config_callback(http, verb, args, reader, writer, request_headers=
     return bytes_sent, http_status
 
 
-## noinspection PyUnusedLocal
+# noinspection PyUnusedLocal
 async def api_restart_callback(http, verb, args, reader, writer, request_headers=None):
     global restart
     if upython:

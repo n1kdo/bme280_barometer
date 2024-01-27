@@ -125,7 +125,7 @@ class HttpServer:
         status_text = self.HTTP_STATUS_TEXT.get(http_status) or 'Confused'
         protocol = 'HTTP/1.0'
         writer.write(f'{protocol} {http_status} {status_text}\r\n'.encode('utf-8'))
-        writer.write('Access-Control-Allow-Origin: *\n'.encode('utf-8'))
+        writer.write('Access-Control-Allow-Origin: *\n'.encode('utf-8'))  # CORS override
         if content_type is not None and len(content_type) > 0:
             writer.write(f'Content-type: {content_type}; charset=UTF-8\r\n'.encode('utf-8'))
         if response_size > 0:

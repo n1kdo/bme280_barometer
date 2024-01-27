@@ -103,6 +103,9 @@ will need to upload them using a different name, and then rename them.
 If you feel adventurous, you can modify the `config.json` file to set your Wi-Fi SSID and secret prior to loading the
 software.
 
+The bme280_float.py and bme280_int.py came from
+[robert-hh's github](https://github.com/robert-hh/BME280) -- thank you.
+
 ### Additional Stuff
 
 Here's the code that makes up the "Loader".

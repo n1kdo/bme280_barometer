@@ -81,6 +81,44 @@ def put_file(filename, target):
             print(f'cannot find source file {src_file_name}')
 
 
+class BytesConcatenator(object):
+    """
+    this is used to collect data from pyboard functions that otherwise do not return data.
+    """
+
+    def __init__(self):
+        self.data = bytearray()
+
+    def write_bytes(self, b):
+        b = b.replace(b"\x04", b"")
+        self.data.extend(b)
+
+    def __str__(self):
+        stuff = self.data.decode('utf-8').replace('\r', '')
+        return stuff
+
+
+def loader_ls(target, src='/'):
+    files_found = []
+    files_data = BytesConcatenator()
+    cmd = (
+        "import uos\nfor f in uos.ilistdir(%s):\n"
+        " print('{}{}'.format(f[0],'/'if f[1]&0x4000 else ''))"
+        % (("'%s'" % src) if src else "")
+    )
+    target.exec_(cmd, data_consumer=files_data.write_bytes)
+    files = str(files_data).split('\n')
+    for phile in files:
+        if len(phile) > 0:
+            if phile.endswith('/'):
+                children = loader_ls(target, phile)
+                for child in children:
+                    files_found.append(f'{phile}{child}')
+            else:
+                files_found.append(phile)
+    return files_found
+
+
 def load_device(port):
     try:
         target = Pyboard(port, BAUD_RATE)
@@ -88,6 +126,19 @@ def load_device(port):
         print(f'cannot access port {port}, is something else using it?')
         sys.exit(1)
     target.enter_raw_repl()
+
+    # clean up files that do not belong here.
+    existing_files = loader_ls(target)
+    for existing_file in existing_files:
+        if existing_file not in FILES_LIST:
+            if existing_file[:-1] == '/':
+                print(f'removing directory {existing_file[:-1]}')
+                target.fs_rm(existing_file[:-1])
+            else:
+                print(f'removing file {existing_file}')
+                target.fs_rm(existing_file)
+
+    # now add the files that do belong here.
     for file in FILES_LIST:
         put_file(file, target)
     print('finished sending files')

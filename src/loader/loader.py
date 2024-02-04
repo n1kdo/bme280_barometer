@@ -4,6 +4,7 @@ Script loads code & other assets onto Raspberry Pi Pico W
 """
 __author__ = 'J. B. Otterson'
 __copyright__ = 'Copyright 2022, 2024, J. B. Otterson N1KDO.'
+__version__ = '0.0.8'
 
 import os
 import serial
@@ -41,7 +42,7 @@ def get_ports_list():
     ports_list = []
     for port in ports:
         ports_list.append(port.device)
-    return sorted(ports_list, key=lambda k: int(k[3:]))
+    return sorted(ports_list)
 
 
 def put_file_progress_callback(bytes_so_far, bytes_total):

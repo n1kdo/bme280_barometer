@@ -1,6 +1,6 @@
 {
   "SSID": "FBI Surveillance Van",
-  "secret": "REDACTED",
+  "secret": "this aint no disco",
   "tcp_port": "73",
   "web_port": "80",
   "ap_mode": false,

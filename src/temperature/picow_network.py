@@ -5,6 +5,7 @@
 
 __author__ = 'J. B. Otterson'
 __copyright__ = 'Copyright 2024, J. B. Otterson N1KDO.'
+__version__ = '0.0.2'
 
 #
 # Copyright 2024, J. B. Otterson N1KDO.
@@ -61,14 +62,14 @@ def connect_to_network(config, default_ssid='PICO-W', default_secret='PICO-W', m
     if hostname is None or hostname == '':
         hostname = 'pico-w'
     try:
-        logging.info(f'...setting hostname "{hostname}"', 'main:connect_to_network')
+        logging.info(f'Setting hostname "{hostname}"', 'main:connect_to_network')
         network.hostname(hostname)
     except ValueError:
         logging.error('Failed to set hostname.', 'main:connect_to_network')
 
     access_point_mode = config.get('ap_mode') or False
     if access_point_mode:
-        logging.info('Starting setup WLAN...', 'main:connect_to_network')
+        logging.info('Starting setup WLAN as Access Point...', 'main:connect_to_network')
         wlan = network.WLAN(network.AP_IF)
         wlan.deinit()
         wlan.config(pm=wlan.PM_NONE)  # disable power save, this is a server.
@@ -103,7 +104,7 @@ def connect_to_network(config, default_ssid='PICO-W', default_secret='PICO-W', m
         logging.info(f'  ssid={wlan.config("ssid")}', 'main:connect_to_network')
         logging.info(f'  ifconfig={wlan.ifconfig()}', 'main:connect_to_network')
     else:
-        logging.info('Connecting to WLAN...', 'main:connect_to_network')
+        logging.info('Connecting to WLAN as Client...', 'main:connect_to_network')
         wlan = network.WLAN(network.STA_IF)
         wlan.deinit()
         # wlan.deinit turns off the onboard LED because it is connected to the CYW43
@@ -130,11 +131,10 @@ def connect_to_network(config, default_ssid='PICO-W', default_secret='PICO-W', m
                 logging.warning('Cannot use static IP, data is missing.', 'main:connect_to_network')
                 logging.warning('Configuring network with DHCP....', 'main:connect_to_network')
                 is_dhcp = True
-                # wlan.ifconfig('dhcp')
         if is_dhcp:
             logging.info('Configuring network with DHCP...', 'main:connect_to_network')
 
-        max_wait = 15
+        max_wait = 20
         wl_status = wlan.status()
         logging.info(f'...ifconfig={wlan.ifconfig()}', 'main:connect_to_network')
         logging.info(f'...connecting to "{ssid}"...', 'main:connect_to_network')

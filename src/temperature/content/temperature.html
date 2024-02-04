@@ -94,7 +94,6 @@
         get_status();
     }
 
-
     function draw_graph(cvs, trend_data, current, markers, labels) {
         let ctx = cvs.getContext("2d");
         ctx.clearRect(0, 0, cvs.width, cvs.height);
@@ -111,7 +110,7 @@
         }
         ctx.fillStyle = "rgb(0, 0, 255)";
         let ct = "" + current;
-        let x = ct.length === 4 ? 70 : 55;
+        let x = 120 - 10 * ct.length;
         let y = 40;
         ctx.font = "normal normal bold 48px monospace";
         ctx.fillText(ct, x, y);
@@ -162,7 +161,8 @@
         cvs = document.getElementById("h_trend");
         markers = [63, 127, 191];  // markers at 25, 50,75%
         labels = [" 25%", " 50%", " 75%"];
-        draw_graph(cvs, h_trend, last_humidity, markers, labels);
+        let current = "" + last_humidity + "%";
+        draw_graph(cvs, h_trend, current, markers, labels);
 
         cvs = document.getElementById("p_trend");
         markers = [0, 20, 40, 60, 80, 100, 120, 140, 160, 180, 200, 220, 240];
@@ -198,11 +198,14 @@
                 }
                 else
                 {
-                    alert("HTTP status " + xmlHttp.status + " from " + xmlHttp.responseURL);
+                    if (xmlHttp.status === 0) {
+                        alert("No response from device.");
+                    } else {
+                        alert("Got HTTP status " + xmlHttp.status + " from device.");
+                    }
                 }
             }
         }
-        //xmlHttp.open("GET", "http://picow-pins/api/status", true);  // TODO FIXME
         xmlHttp.open("GET", "/api/status", true);
         xmlHttp.send();
     }
@@ -245,7 +248,7 @@
     <div class="column">
         <p class="readout-header" id="p-header">Barometric Pressure ?&quot; Hg.</p>
         <p class="readout-chart"><canvas class="trend-chart" width="260" height="256" id="p_trend"></canvas></p>
-        <div class="author"><a href="https://www.n1kdo.com" target="_blank">N1KDO</a> 20240129</div>
+        <div class="author"><a href="https://www.n1kdo.com" target="_blank">N1KDO</a> 20240204</div>
     </div>
 </div>
 </body>

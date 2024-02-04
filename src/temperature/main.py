@@ -3,10 +3,11 @@
 #
 
 __author__ = 'J. B. Otterson'
-__copyright__ = 'Copyright 2022, J. B. Otterson N1KDO.'
+__copyright__ = 'Copyright 2022, 2024 J. B. Otterson N1KDO.'
+__version__ = '0.0.8'
 
 #
-# Copyright 2022, J. B. Otterson N1KDO.
+# Copyright 2022, 2024 J. B. Otterson N1KDO.
 #
 # Redistribution and use in source and binary forms, with or without modification,
 # are permitted provided that the following conditions are met:
@@ -300,8 +301,8 @@ async def api_restart_callback(http, verb, args, reader, writer, request_headers
 
 async def api_status_callback(http, verb, args, reader, writer, request_headers=None):  # '/api/kpa_status'
     payload = {'timestamp': get_timestamp(),
-               'last_temperature': f'{last_temperature:3.1f}',
-               'last_humidity': f'{last_humidity:3.1f}',
+               'last_temperature': f'{int(last_temperature)}',
+               'last_humidity': f'{int(last_humidity)}',
                'last_pressure': f'{last_pressure:5.2f}',
                't_trend': str(t_samples),
                'h_trend': str(h_samples),
@@ -333,8 +334,8 @@ async def serve_serial_client(reader, writer):
                     b = data[0]
                     if b == 10:  # line feed, get temperature
                         payload = {'timestamp': get_timestamp(),
-                                   'last_temperature': f'{last_temperature:3.1f}',
-                                   'last_humidity': f'{last_humidity:3.1f}',
+                                   'last_temperature': f'{int(last_temperature)}',
+                                   'last_humidity': f'{int(last_humidity)}',
                                    'last_pressure': f'{last_pressure:5.2f}',
                                    't_trend': str(t_samples),
                                    'h_trend': str(h_samples),
@@ -358,7 +359,7 @@ async def serve_serial_client(reader, writer):
 
 async def bme280_reader(bme):
     global last_temperature, last_humidity, last_pressure
-    result = array('f', (0.0, 0.0, 0.0))
+    result = array('f', (0, 0, 0))
     divider_count = 1
 
     while True:
@@ -366,23 +367,26 @@ async def bme280_reader(bme):
         tc = result[0]
         p = result[1]
         h = result[2]
-        p += 3625  # correction factor, unknown why at this time.
-        hpa = p / 100.0
+        # logging.info(f'c, p, h = {result}')
+        # logging.info(f'uncooked p={p}', 'main:bme_reader')
+        p += 3625  # pressure offset / correction factor, unknown why at this time.
+        # logging.info(f'corrected p={p}', 'main:bme_reader')
+        hpa = p / 100
 
         tf = tc * 1.8 + 32.0  # make Fahrenheit for Americans
         inhg = p / 1000 * 0.295300  # make inches of mercury for Americans
 
-        last_temperature = round(tf, 1)
-        last_pressure = round(inhg, 2)
-        last_humidity = round(h, 1)
-        logging.info(f'{hpa:7.2f} hPa', 'main:bme280_reader')
-        logging.info(f'{get_timestamp()} temperature {last_temperature:5.1f}F, ' +
-                     f'humidity {last_humidity:5.1f}%, pressure {last_pressure:5.2f} in. Hg', 'main:bme280_reader')
+        last_temperature = round(tf)  # device spec is +/1 0.5C, so 1F is good enough.
+        last_pressure = round(inhg, 2)  # device spec is +/- 1 hPa, so this is sufficient
+        last_humidity = round(h)  # device spec is +/- 3%
+        logging.info(f'{hpa:6.1f} hPa', 'main:bme280_reader')
+        logging.info(f'{get_timestamp()} temperature {int(last_temperature)}F, ' +
+                     f'humidity {int(last_humidity)}%, pressure {last_pressure:5.2f} in. Hg', 'main:bme280_reader')
 
         divider_count -= 1
         if divider_count == 0:  # every 6 minutes, .1 hour
             divider_count = 6  # this is the number of minutes between samples.
-            # scale samples
+            # scale samples for simple graph
             pp = int((hpa - 950) * 2)  # pressure 950 - 1077 ( in 1/2 hpa intervals )
             pt = int((tc + 30) * 3)  # -30 -> 55c == -22 -> 131f in 1/3 degree C intervals
             if pt < 0:
@@ -448,7 +452,7 @@ async def main():
         i2c = machine.I2C(1, scl=machine.Pin(27), sda=machine.Pin(26))
         bme280_device = None
         try:
-            bme280_device = bme280.BME280(i2c=i2c)
+            bme280_device = bme280.BME280(i2c=i2c, mode=bme280.BME280_OSAMPLE_16)
         except Exception as exc:
             logging.error(f'Cannot find bme280 sensor! {exc}', 'main:main')
             bme280_device = None

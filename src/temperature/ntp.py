@@ -4,7 +4,7 @@
 #
 __author__ = 'J. B. Otterson'
 __copyright__ = 'Copyright 2024, 2025 J. B. Otterson N1KDO.'
-__version__ = '0.0.9'
+__version__ = '0.1.0'  # 2025-11-27
 #
 # Copyright 2024, 2025, J. B. Otterson N1KDO.
 #
@@ -61,8 +61,6 @@ def get_ntp_time(host='pool.ntp.org'):
         sock.settimeout(_SOCKET_TIMEOUT)
         sock.sendto(_NTP_MSG, address)
         msg = sock.recvfrom(_BUF_SIZE)[0]
-        sock.close()
-
         t = struct.unpack(_STRUCT_FORMAT, msg)[10] - _UNIX_EPOCH
         tt = time.gmtime(t)
         if _IS_MICROPYTHON:

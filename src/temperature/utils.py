@@ -3,7 +3,7 @@
 #
 __author__ = 'J. B. Otterson'
 __copyright__ = """
-Copyright 2023, J. B. Otterson N1KDO.
+Copyright 2023, 2025 J. B. Otterson N1KDO.
 Redistribution and use in source and binary forms, with or without modification, 
 are permitted provided that the following conditions are met:
   1. Redistributions of source code must retain the above copyright notice, 
@@ -22,13 +22,14 @@ LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
 OF THE POSSIBILITY OF SUCH DAMAGE.
 """
-__version__ = '0.9.0'
+__version__ = '0.9.1'
 
 import sys
 import time
 
 upython = sys.implementation.name == 'micropython'
 
+BITS = bytes([0, 1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 4])
 
 def get_timestamp(tt=None):
     if tt is None:
@@ -41,7 +42,22 @@ def milliseconds():
 
 
 def safe_int(value, default=-1):
+    if value is None:
+        return default
     if isinstance(value, int):
         return value
-    return int(value) if value.isdigit() else default
+    try:
+        return int(value)
+    except ValueError:
+        return default
+
+
+def num_bits_set(n: int) -> int:
+    #       0000 0001 0010 0011 0100 0101 0110 0111 1000 1001 1010 1011 1100 1101 1111
+    nn = n
+    set_bits = 0
+    while nn:
+        set_bits += BITS[nn & 0x0f]
+        nn >>= 4
+    return set_bits
 

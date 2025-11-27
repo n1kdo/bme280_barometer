@@ -482,7 +482,7 @@ async def main():
                             netmask = picow_network.get_netmask()
                             logging.info(f'ip_address {ip_address}, netmask {netmask}', 'main:main')
                         else:
-                            logging.info('waiting for picow network', 'main:main')
+                            logging.debug('waiting for picow network', 'main:main')
 
                     else:  # is connected, look for disconnect
                         connected = picow_network.is_connected()

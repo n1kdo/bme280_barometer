@@ -1,0 +1,23 @@
+{
+  "source_directory" : "../temperature/",
+  "files": [
+    "content/",
+    "data/",
+    "main.py",
+    "bme280_float.py",
+    "http_server.py",
+    "micro_logging.py",
+    "morse_code.py",
+    "ntp.py",
+    "picow_network.py",
+    "utils.py",
+    "content/favicon.ico",
+    "content/files.html",
+    "content/temperature.html",
+    "content/setup.html",
+    "data/config.json"
+  ],
+  "special_files": [
+    "data/config.json"
+  ]
+}

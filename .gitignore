@@ -1,2 +1,6 @@
 config.json
-
+/.github/
+/.idea/*.iml
+/.idea/micropython-tools-settings.xml
+/.idea/libraries/
+/.venv/

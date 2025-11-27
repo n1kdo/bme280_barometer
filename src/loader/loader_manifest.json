@@ -14,8 +14,7 @@
     "content/favicon.ico",
     "content/files.html",
     "content/temperature.html",
-    "content/setup.html",
-    "data/config.json"
+    "content/setup.html"
   ],
   "special_files": [
     "data/config.json"

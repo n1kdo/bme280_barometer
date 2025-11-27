@@ -3,11 +3,11 @@
 #
 
 __author__ = 'J. B. Otterson'
-__copyright__ = 'Copyright 2022, 2024 J. B. Otterson N1KDO.'
-__version__ = '0.0.8'
+__copyright__ = 'Copyright 2022, 2024, 2025 J. B. Otterson N1KDO.'
+__version__ = '0.0.9'
 
 #
-# Copyright 2022, 2024 J. B. Otterson N1KDO.
+# Copyright 2022, 2024, 2025 J. B. Otterson N1KDO.
 #
 # Redistribution and use in source and binary forms, with or without modification,
 # are permitted provided that the following conditions are met:
@@ -41,7 +41,7 @@ from http_server import (HttpServer,
 from morse_code import MorseCode
 from ntp import get_ntp_time
 from utils import milliseconds, upython, safe_int
-from picow_network import connect_to_network
+from picow_network import PicowNetwork
 
 if upython:
     import machine
@@ -108,7 +108,6 @@ last_pressure = 0
 restart = False
 port = None
 http_server = HttpServer(content_dir=CONTENT_DIR)
-morse_code_sender = MorseCode(onboard)
 
 MAX_SAMPLES = 240  # one sample every 10 minutes
 
@@ -413,40 +412,32 @@ async def main():
     if web_port < 0 or web_port > 65535:
         web_port = DEFAULT_WEB_PORT
 
-    connected = True
     if upython:
-        try:
-            ip_address = connect_to_network(config, DEFAULT_SSID, DEFAULT_SECRET, morse_code_sender)
-            connected = ip_address is not None
-        except Exception as ex:
-            connected = False
-            logging.error(f'Network connection failed, {type(ex)}, {ex}', 'main:main')
+        picow_network = PicowNetwork(config, DEFAULT_SSID, DEFAULT_SECRET)
+        morse_code_sender = MorseCode(onboard)
+        # if logging.should_log(logging.DEBUG):
+        #    _ = Watchdog()
+    else:
+        picow_network = None
+        morse_code_sender = None
+
 
     if upython:
         morse_task = asyncio.create_task(morse_code_sender.morse_sender())
 
-    if connected:
-        ntp_time = get_ntp_time()
-        if ntp_time is None:
-            logging.error('ntp time query failed.  clock may be inaccurate.', 'main:main')
-        else:
-            logging.info(f'Got time from NTP: {get_timestamp()}', 'main:main')
+    http_server.add_uri_callback('/', slash_callback)
+    http_server.add_uri_callback('/api/config', api_config_callback)
+    http_server.add_uri_callback('/api/get_files', api_get_files_callback)
+    http_server.add_uri_callback('/api/upload_file', api_upload_file_callback)
+    http_server.add_uri_callback('/api/remove_file', api_remove_file_callback)
+    http_server.add_uri_callback('/api/rename_file', api_rename_file_callback)
+    http_server.add_uri_callback('/api/restart', api_restart_callback)
+    http_server.add_uri_callback('/api/status', api_status_callback)
 
-        http_server.add_uri_callback('/', slash_callback)
-        http_server.add_uri_callback('/api/config', api_config_callback)
-        http_server.add_uri_callback('/api/get_files', api_get_files_callback)
-        http_server.add_uri_callback('/api/upload_file', api_upload_file_callback)
-        http_server.add_uri_callback('/api/remove_file', api_remove_file_callback)
-        http_server.add_uri_callback('/api/rename_file', api_rename_file_callback)
-        http_server.add_uri_callback('/api/restart', api_restart_callback)
-        http_server.add_uri_callback('/api/status', api_status_callback)
-
-        logging.info(f'Starting web service on port {web_port}', 'main:main')
-        web_server = asyncio.create_task(asyncio.start_server(http_server.serve_http_client, '0.0.0.0', web_port))
-        logging.info(f'Starting tcp service on port {tcp_port}', 'main:main')
-        tcp_server = asyncio.create_task(asyncio.start_server(serve_serial_client, '0.0.0.0', tcp_port))
-    else:
-        logging.error('no network connection', 'main:main')
+    logging.info(f'Starting web service on port {web_port}', 'main:main')
+    web_server = asyncio.create_task(asyncio.start_server(http_server.serve_http_client, '0.0.0.0', web_port))
+    logging.info(f'Starting tcp service on port {tcp_port}', 'main:main')
+    tcp_server = asyncio.create_task(asyncio.start_server(serve_serial_client, '0.0.0.0', tcp_port))
 
     if upython:
         i2c = machine.I2C(1, scl=machine.Pin(27), sda=machine.Pin(26))
@@ -465,9 +456,15 @@ async def main():
     else:
         last_pressed = False
 
+    four_count = 0
+    time_set = False
+    connected = False
+    last_message = ''
+
     while True:
         if upython:
             await asyncio.sleep(0.25)
+            four_count += 1
             pressed = button.value() == 0
             if not last_pressed and pressed:  # look for activating edge
                 ap_mode = config.get('ap_mode') or False
@@ -479,13 +476,45 @@ async def main():
 
             if restart:
                 machine.soft_reset()
+
+            if four_count >= 3:  # check for new message every one second
+                if picow_network is not None:
+                    if not connected:
+                        logging.debug('checking network connection', 'main:main')
+                        connected = picow_network.is_connected()
+                        if connected:
+                            logging.info('network connection established', 'main:main')
+                            ip_address = picow_network.get_ip_address()
+                            netmask = picow_network.get_netmask()
+                            logging.info(f'ip_address {ip_address}, netmask {netmask}', 'main:main')
+                        else:
+                            logging.info('waiting for picow network', 'main:main')
+
+                    else:  # is connected, look for disconnect
+                        connected = picow_network.is_connected()
+                        if not connected:
+                            logging.info('network connection disconnected', 'main:main')
+                else:
+                    connected = True
+
+                if picow_network.get_message() != last_message:
+                    last_message = picow_network.get_message()
+                    morse_code_sender.set_message(last_message)
+                # can I get the time from NTP?
+                if picow_network is not None and not time_set and connected:
+                    get_ntp_time()
+                    if time.time() > 1700000000:
+                        time_set = True
+                        logging.info(f'Time set by NTP.', 'main:main')
+                four_count = 0
+
         else:
             await asyncio.sleep(10.0)
 
 
 if __name__ == '__main__':
     # logging.loglevel = logging.DEBUG
-    logging.loglevel = logging.INFO  # DEBUG
+    logging.loglevel = logging.INFO
     logging.info('starting', 'main:__main__')
     try:
         asyncio.run(main())

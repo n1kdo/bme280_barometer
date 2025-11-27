@@ -34,10 +34,12 @@ import time
 from array import array
 
 from http_server import (HttpServer,
-                         api_rename_file_callback,
-                         api_remove_file_callback,
-                         api_upload_file_callback,
-                         api_get_files_callback)
+                         HTTP_STATUS_OK,
+                         HTTP_STATUS_MOVED_PERMANENTLY,
+                         HTTP_STATUS_BAD_REQUEST,
+                         HTTP_STATUS_CONFLICT,
+                         HTTP_VERB_GET, HTTP_VERB_POST)
+
 from morse_code import MorseCode
 from ntp import get_ntp_time
 from utils import milliseconds, upython, safe_int
@@ -108,6 +110,7 @@ last_pressure = 0
 restart = False
 port = None
 http_server = HttpServer(content_dir=CONTENT_DIR)
+
 
 MAX_SAMPLES = 240  # one sample every 10 minutes
 
@@ -191,21 +194,23 @@ def save_config(config):
 
 
 # noinspection PyUnusedLocal
+@http_server.route(b'/')
 async def slash_callback(http, verb, args, reader, writer, request_headers=None):  # callback for '/'
-    http_status = 301
-    bytes_sent = http.send_simple_response(writer, http_status, None, None, ['Location: /temperature.html'])
+    http_status = HTTP_STATUS_MOVED_PERMANENTLY
+    bytes_sent = await http.send_simple_response(writer, http_status, None, None, ['Location: /temperature.html'])
     return bytes_sent, http_status
 
 
 # noinspection PyUnusedLocal
+@http_server.route(b'/api/config')
 async def api_config_callback(http, verb, args, reader, writer, request_headers=None):  # callback for '/api/config'
-    if verb == 'GET':
+    if verb == HTTP_VERB_GET:
         payload = read_config()
-        # payload.pop('secret')  # do not return the secret
+        payload.pop('secret')  # do not return the secret
         response = json.dumps(payload).encode('utf-8')
-        http_status = 200
-        bytes_sent = http.send_simple_response(writer, http_status, http.CT_APP_JSON, response)
-    elif verb == 'POST':
+        http_status = HTTP_STATUS_OK
+        bytes_sent = await http.send_simple_response(writer, http_status, http.CT_APP_JSON, response)
+    elif verb == HTTP_VERB_POST:
         config = read_config()
         dirty = False
         errors = False
@@ -269,35 +274,36 @@ async def api_config_callback(http, verb, args, reader, writer, request_headers=
             if dirty:
                 save_config(config)
             response = b'ok\r\n'
-            http_status = 200
-            bytes_sent = http.send_simple_response(writer, http_status, http.CT_TEXT_TEXT, response)
+            http_status = HTTP_STATUS_OK
+            bytes_sent = await http.send_simple_response(writer, http_status, http.CT_TEXT_TEXT, response)
         else:
             response = b'parameter out of range\r\n'
-            http_status = 400
-            bytes_sent = http.send_simple_response(writer, http_status, http.CT_TEXT_TEXT, response)
+            http_status = HTTP_STATUS_BAD_REQUEST
+            bytes_sent = await http.send_simple_response(writer, http_status, http.CT_TEXT_TEXT, response)
 
     else:
         response = b'GET or PUT only.'
-        http_status = 400
-        bytes_sent = http.send_simple_response(writer, http_status, http.CT_TEXT_TEXT, response)
+        http_status = HTTP_STATUS_BAD_REQUEST
+        bytes_sent = await http.send_simple_response(writer, http_status, http.CT_TEXT_TEXT, response)
     return bytes_sent, http_status
 
 
 # noinspection PyUnusedLocal
+@http_server.route(b'/api/restart')
 async def api_restart_callback(http, verb, args, reader, writer, request_headers=None):
     global restart
     if upython:
         restart = True
         response = b'ok\r\n'
-        http_status = 200
-        bytes_sent = http.send_simple_response(writer, http_status, http.CT_TEXT_TEXT, response)
+        http_status = HTTP_STATUS_OK
+        bytes_sent = await http.send_simple_response(writer, http_status, http.CT_TEXT_TEXT, response)
     else:
-        http_status = 400
+        http_status = HTTP_STATUS_BAD_REQUEST
         response = b'not permitted except on PICO-W'
-        bytes_sent = http.send_simple_response(writer, http_status, http.CT_APP_JSON, response)
+        bytes_sent = await http.send_simple_response(writer, http_status, http.CT_APP_JSON, response)
     return bytes_sent, http_status
 
-
+@http_server.route(b'/api/status')
 async def api_status_callback(http, verb, args, reader, writer, request_headers=None):  # '/api/kpa_status'
     payload = {'timestamp': get_timestamp(),
                'last_temperature': f'{int(last_temperature)}',
@@ -307,10 +313,8 @@ async def api_status_callback(http, verb, args, reader, writer, request_headers=
                'h_trend': str(h_samples),
                'p_trend': str(p_samples),
                }
-
-    response = json.dumps(payload).encode('utf-8')
-    http_status = 200
-    bytes_sent = http.send_simple_response(writer, http_status, http.CT_APP_JSON, response)
+    http_status = HTTP_STATUS_OK
+    bytes_sent = await http.send_simple_response(writer, http_status, http.CT_APP_JSON, payload)
     return bytes_sent, http_status
 
 
@@ -421,18 +425,8 @@ async def main():
         picow_network = None
         morse_code_sender = None
 
-
     if upython:
         morse_task = asyncio.create_task(morse_code_sender.morse_sender())
-
-    http_server.add_uri_callback('/', slash_callback)
-    http_server.add_uri_callback('/api/config', api_config_callback)
-    http_server.add_uri_callback('/api/get_files', api_get_files_callback)
-    http_server.add_uri_callback('/api/upload_file', api_upload_file_callback)
-    http_server.add_uri_callback('/api/remove_file', api_remove_file_callback)
-    http_server.add_uri_callback('/api/rename_file', api_rename_file_callback)
-    http_server.add_uri_callback('/api/restart', api_restart_callback)
-    http_server.add_uri_callback('/api/status', api_status_callback)
 
     logging.info(f'Starting web service on port {web_port}', 'main:main')
     web_server = asyncio.create_task(asyncio.start_server(http_server.serve_http_client, '0.0.0.0', web_port))

@@ -107,6 +107,7 @@ DEFAULT_WEB_PORT = 80
 last_temperature = 0
 last_humidity = 0
 last_pressure = 0
+config = {}
 restart = False
 port = None
 http_server = HttpServer(content_dir=CONTENT_DIR)
@@ -179,46 +180,52 @@ def get_iso_8601_timestamp(tt=None):
 
 
 def read_config():
-    config = {}
+    config_dict = {}
     try:
         with open(CONFIG_FILE, 'r') as config_file:
-            config = json.load(config_file)
+            config_dict = json.load(config_file)
     except Exception as ex:
         logging.error(f'failed to load configuration:  {type(ex)}, {ex}', 'main:read_config()')
-    return config
+    return config_dict
 
 
-def save_config(config):
+def save_config(config_dict):
     with open(CONFIG_FILE, 'w') as config_file:
-        json.dump(config, config_file)
+        json.dump(config_dict, config_file)
 
 
 # noinspection PyUnusedLocal
 @http_server.route(b'/')
 async def slash_callback(http, verb, args, reader, writer, request_headers=None):  # callback for '/'
+    ap_mode = config.get('ap_mode', False)
+    if ap_mode:
+        redirect = [b'Location: /setup.html']
+    else:
+        redirect = [b'Location: /temperature.html']
     http_status = HTTP_STATUS_MOVED_PERMANENTLY
-    bytes_sent = await http.send_simple_response(writer, http_status, None, None, ['Location: /temperature.html'])
+    bytes_sent = await http.send_simple_response(writer, http_status, None, None, redirect)
     return bytes_sent, http_status
 
 
 # noinspection PyUnusedLocal
 @http_server.route(b'/api/config')
 async def api_config_callback(http, verb, args, reader, writer, request_headers=None):  # callback for '/api/config'
+    global config
     if verb == HTTP_VERB_GET:
         payload = read_config()
         payload.pop('secret')  # do not return the secret
-        response = json.dumps(payload).encode('utf-8')
         http_status = HTTP_STATUS_OK
-        bytes_sent = await http.send_simple_response(writer, http_status, http.CT_APP_JSON, response)
+        bytes_sent = await http.send_simple_response(writer, http_status, http.CT_APP_JSON, payload)
     elif verb == HTTP_VERB_POST:
-        config = read_config()
+        config_dict = read_config()
+        logging.debug(f'read config_dict: {config_dict}', 'main:api_config_callback:POST')
         dirty = False
         errors = False
         tcp_port = args.get('tcp_port')
         if tcp_port is not None:
             tcp_port_int = safe_int(tcp_port, -2)
             if 0 <= tcp_port_int <= 65535:
-                config['tcp_port'] = tcp_port
+                config_dict['tcp_port'] = tcp_port
                 dirty = True
             else:
                 errors = True
@@ -226,53 +233,56 @@ async def api_config_callback(http, verb, args, reader, writer, request_headers=
         if web_port is not None:
             web_port_int = safe_int(web_port, -2)
             if 0 <= web_port_int <= 65535:
-                config['web_port'] = web_port
+                config_dict['web_port'] = web_port
                 dirty = True
             else:
                 errors = True
         ssid = args.get('SSID')
         if ssid is not None:
             if 0 < len(ssid) < 64:
-                config['SSID'] = ssid
+                config_dict['SSID'] = ssid
                 dirty = True
             else:
                 errors = True
         secret = args.get('secret')
-        if secret is not None:
+        if secret is not None and len(secret) > 0:
             if 8 <= len(secret) < 32:
-                config['secret'] = secret
+                config_dict['secret'] = secret
                 dirty = True
             else:
                 errors = True
-        ap_mode_arg = args.get('ap_mode')
-        if ap_mode_arg is not None:
-            ap_mode = True if ap_mode_arg == '1' else False
-            config['ap_mode'] = ap_mode
+        ap_mode = config_dict.get('ap_mode', False)
+        logging.debug(f'config_dict(ap_mode) = {ap_mode}', 'main:api_config_callback:POST')
+        if ap_mode:
+            # always turn off AP mode when config is written.
+            config_dict['ap_mode'] = False
             dirty = True
         dhcp_arg = args.get('dhcp')
         if dhcp_arg is not None:
             dhcp = True if dhcp_arg == 1 else False
-            config['dhcp'] = dhcp
+            config_dict['dhcp'] = dhcp
             dirty = True
         ip_address = args.get('ip_address')
         if ip_address is not None:
-            config['ip_address'] = ip_address
+            config_dict['ip_address'] = ip_address
             dirty = True
         netmask = args.get('netmask')
         if netmask is not None:
-            config['netmask'] = netmask
+            config_dict['netmask'] = netmask
             dirty = True
         gateway = args.get('gateway')
         if gateway is not None:
-            config['gateway'] = gateway
+            config_dict['gateway'] = gateway
             dirty = True
         dns_server = args.get('dns_server')
         if dns_server is not None:
-            config['dns_server'] = dns_server
+            config_dict['dns_server'] = dns_server
             dirty = True
         if not errors:
             if dirty:
-                save_config(config)
+                logging.debug(f'writing config: {config_dict}', 'main:api_config_callback:POST')
+                save_config(config_dict)
+                config = config_dict
             response = b'ok\r\n'
             http_status = HTTP_STATUS_OK
             bytes_sent = await http.send_simple_response(writer, http_status, http.CT_TEXT_TEXT, response)
@@ -407,7 +417,7 @@ async def bme280_reader(bme):
 
 
 async def main():
-    global port, restart
+    global port, restart, config
     config = read_config()
     tcp_port = safe_int(config.get('tcp_port') or DEFAULT_TCP_PORT, DEFAULT_TCP_PORT)
     if tcp_port < 0 or tcp_port > 65535:
@@ -454,6 +464,7 @@ async def main():
     time_set = False
     connected = False
     last_message = ''
+    ap_mode = config.get('ap_mode', False)
 
     while True:
         if upython:
@@ -461,7 +472,6 @@ async def main():
             four_count += 1
             pressed = button.value() == 0
             if not last_pressed and pressed:  # look for activating edge
-                ap_mode = config.get('ap_mode') or False
                 ap_mode = not ap_mode
                 config['ap_mode'] = ap_mode
                 save_config(config)
@@ -491,15 +501,16 @@ async def main():
                 else:
                     connected = True
 
-                if picow_network.get_message() != last_message:
-                    last_message = picow_network.get_message()
-                    morse_code_sender.set_message(last_message)
-                # can I get the time from NTP?
-                if picow_network is not None and not time_set and connected:
-                    get_ntp_time()
-                    if time.time() > 1700000000:
-                        time_set = True
-                        logging.info(f'Time set by NTP.', 'main:main')
+                if picow_network is not None:
+                    if picow_network.get_message() != last_message:
+                        last_message = picow_network.get_message()
+                        morse_code_sender.set_message(last_message)
+                    # can I get the time from NTP?
+                    if not time_set and not ap_mode and connected:
+                        tt = get_ntp_time()
+                        if tt is not None and time.time() > 1700000000:
+                            time_set = True
+                            logging.info(f'Time set by NTP.', 'main:main')
                 four_count = 0
 
         else:
@@ -507,7 +518,7 @@ async def main():
 
 
 if __name__ == '__main__':
-    # logging.loglevel = logging.DEBUG
+    #logging.loglevel = logging.DEBUG
     logging.loglevel = logging.INFO
     logging.info('starting', 'main:__main__')
     try:

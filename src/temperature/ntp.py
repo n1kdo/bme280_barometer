@@ -4,7 +4,7 @@
 #
 __author__ = 'J. B. Otterson'
 __copyright__ = 'Copyright 2024, 2025 J. B. Otterson N1KDO.'
-__version__ = '0.1.0'  # 2025-11-27
+__version__ = '0.1.1'  # 2025-11-28
 #
 # Copyright 2024, 2025, J. B. Otterson N1KDO.
 #
@@ -68,7 +68,7 @@ def get_ntp_time(host='pool.ntp.org'):
             try:
                 _rtc.datetime((tt[0], tt[1], tt[2], tt[6], tt[3], tt[4], tt[5], 0))
             except OSError as ose:
-                logging.exception('OSError', 'ntp.get_ntp_time', ose)
+                logging.exception('OSError attempting to set RTC', 'ntp.get_ntp_time', ose)
         return tt
     except OSError as ose:
         logging.exception('OSError', 'ntp.get_ntp_time', ose)

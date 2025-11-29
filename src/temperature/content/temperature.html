@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html xmlns="http://www.w3.org/1999/html" lang="en">
-<!-- Copyright 2024, J. B. Otterson N1KDO. -->
+<!-- Copyright 2024, 2025 J. B. Otterson N1KDO. -->
 <head>
     <meta name="viewport" content="width=device-width, initial-scale=0.8, minimum-scale=0.5, maximum-scale=2.0">
     <title>Weather Gauges</title>
@@ -38,6 +38,13 @@
     input[type=number]::-webkit-inner-spin-button,
     input[type=number]::-webkit-outer-spin-button {
         opacity: 1;
+    }
+    .message {
+        text-align: center;
+        font-size: 12pt;
+        font-weight: bold;
+        height: 1em;
+        display: block;
     }
     .readout-header {
         font-weight: bold;
@@ -88,6 +95,7 @@
 
     let update_secs = 60;
     let update_timeout = 0;
+    let num_fails = 0;
 
     function page_load() {
         // load data from the backend.
@@ -183,6 +191,8 @@
         if (update_secs > 0) {
             update_timeout = setTimeout(get_status, update_secs * 1000);
         }
+        num_fails = 0;
+        document.getElementById("message").innerText = "";
     }
 
     function get_status() {
@@ -192,20 +202,26 @@
             return;
         }
         xmlHttp.onreadystatechange = function () {
-            if (xmlHttp.readyState === 4) {
-                if (xmlHttp.status === 200) {
-                    process_get_status_response(xmlHttp.responseText);
-                }
-                else
-                {
-                    if (xmlHttp.status === 0) {
-                        alert("No response from device.");
-                    } else {
-                        alert("Got HTTP status " + xmlHttp.status + " from device.");
-                    }
-                }
+            if (xmlHttp.readyState === 4 && xmlHttp.status === 200) {
+                process_get_status_response(xmlHttp.responseText);
             }
         }
+        xmlHttp.onerror = function () {
+            num_fails++;
+            document.getElementById("message").innerText = "" + num_fails + " transaction failures.";
+            if (update_secs > 0) {
+                update_timeout = setTimeout(get_status, update_secs * 1000);
+            }
+        }
+
+        xmlHttp.ontimeout = function () {
+            num_fails++;
+            document.getElementById("message").innerText = "" + num_fails + " transaction failures.";
+            if (update_secs > 0) {
+                update_timeout = setTimeout(get_status, update_secs * 1000);
+            }
+        }
+
         xmlHttp.open("GET", "/api/status", true);
         xmlHttp.send();
     }
@@ -234,6 +250,7 @@
     <div class="column">
         <p class="readout-header" id="h-header">?% Humidity</p>
         <p class="readout-chart"><canvas class="trend-chart" width="260" height="256" id="h_trend"></canvas></p>
+        <p class="message" id="message"></p>
         <div class="reload">Refresh&nbsp;
             <input type="radio" name="refresh_radio" id="refresh_radio_0" value="0" onclick="set_refresh(0)"/>
             <label for="refresh_radio_0">Never</label>&nbsp;
@@ -248,7 +265,7 @@
     <div class="column">
         <p class="readout-header" id="p-header">Barometric Pressure ?&quot; Hg.</p>
         <p class="readout-chart"><canvas class="trend-chart" width="260" height="256" id="p_trend"></canvas></p>
-        <div class="author"><a href="https://www.n1kdo.com" target="_blank">N1KDO</a> 20240204</div>
+        <div class="author"><a href="https://www.n1kdo.com" target="_blank">N1KDO</a> 20251129</div>
     </div>
 </div>
 </body>

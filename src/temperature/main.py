@@ -382,17 +382,16 @@ async def bme280_reader(bme):
         h = result[2]
         # logging.info(f'c, p, h = {result}')
         # logging.info(f'uncooked p={p}', 'main:bme_reader')
-        p += 3625  # pressure offset / correction factor, unknown why at this time.
         # logging.info(f'corrected p={p}', 'main:bme_reader')
-        hpa = p / 100
-
+        hpa = p / 100.0
+        hpa += 35.2  # fudge/calibration offset. rectally extracted.
         tf = tc * 1.8 + 32.0  # make Fahrenheit for Americans
-        inhg = p / 1000 * 0.295300  # make inches of mercury for Americans
+        inhg = round(hpa * 0.029529983, 2)  # make inches of mercury for Americans
 
         last_temperature = round(tf)  # device spec is +/1 0.5C, so 1F is good enough.
         last_pressure = round(inhg, 2)  # device spec is +/- 1 hPa, so this is sufficient
         last_humidity = round(h)  # device spec is +/- 3%
-        logging.info(f'{hpa:6.1f} hPa', 'main:bme280_reader')
+        logging.info(f'{hpa:7.2f} hPa', 'main:bme280_reader')
         logging.info(f'{get_timestamp()} temperature {int(last_temperature)}F, ' +
                      f'humidity {int(last_humidity)}%, pressure {last_pressure:5.2f} in. Hg', 'main:bme280_reader')
 
